@@ -62,29 +62,33 @@ Forneça um diagnóstico direto, didático e construtivo.
       ]
     };
 
-    // Modelo atualizado solicitado pela API
-    const MODEL_NAME = 'gemini-3.8-flash';
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/${MODEL_NAME}:generateContent?key=${encodeURIComponent(apiKey)}`;
+    // Lista de modelos ordenados por preferência para evitar gargalos de tráfego
+    const candidateModels = ['gemini-3.8-flash', 'gemini-2.0-flash'];
+    let lastErrorMessage = '';
 
-    const response = await fetch(url, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify(payload)
-    });
-
-    const data = await response.json();
-
-    if (response.ok && data.candidates?.[0]?.content?.parts?.[0]?.text) {
-      return res.status(200).json({ 
-        analysis: data.candidates[0].content.parts[0].text 
+    for (const model of candidateModels) {
+      const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${encodeURIComponent(apiKey)}`;
+      
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
       });
+
+      const data = await response.json();
+
+      if (response.ok && data.candidates?.[0]?.content?.parts?.[0]?.text) {
+        return res.status(200).json({ 
+          analysis: data.candidates[0].content.parts[0].text 
+        });
+      }
+
+      // Salva a mensagem para retorno em caso de falha de todos os modelos
+      lastErrorMessage = data.error?.message || JSON.stringify(data);
     }
 
-    const errorMessage = data.error?.message || JSON.stringify(data);
     return res.status(500).json({ 
-      error: `Erro na API do Gemini: ${errorMessage}` 
+      error: `Erro na API do Gemini: ${lastErrorMessage}` 
     });
 
   } catch (error) {
