@@ -641,47 +641,174 @@ async function analyzePhoto() {
   const outputContent = document.getElementById('outputContent');
   const analyzeBtn = document.getElementById('analyzeBtn');
 
-  // Trava o botão e ativa o estado de carregamento
   analyzeBtn.disabled = true;
   analyzeBtn.classList.add('opacity-50', 'cursor-not-allowed');
 
   outputContent.innerHTML = `
     <div class="flex flex-col items-center justify-center h-64 space-y-4">
       <div class="w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
-      <p class="text-xs text-zinc-400">Analisando iluminação, composição e gerando sugestão de corte via Gemini...</p>
+      <p class="text-xs text-zinc-400 text-center">
+        Analisando iluminação, composição, foco, nitidez e cores...
+      </p>
+      <p class="text-[10px] text-zinc-500">
+        A IA pode levar alguns segundos para concluir a análise.
+      </p>
     </div>
   `;
 
   try {
-    const cleanBase64 = base64Image.split(',')[1] || base64Image;
-    
-    // Requisição POST para o backend em /api/analyze
-    const response = await fetch('/api/analyze', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ imageBase64: cleanBase64 })
-    });
 
-    const data = await response.json();
+    // ---------------------------------------------------------
+    // 1. BASE64
+    // ---------------------------------------------------------
+    const cleanBase64 =
+      base64Image.split(',')[1] || base64Image;
 
-    if (!response.ok) {
-      throw new Error(data.error || 'Erro ao processar a imagem no servidor.');
+    // ---------------------------------------------------------
+    // 2. MIME TYPE
+    //
+    // Obtém o tipo diretamente do Data URL da imagem.
+    // Exemplo:
+    // data:image/jpeg;base64,...
+    // ---------------------------------------------------------
+    let mimeType = 'image/jpeg';
+
+    if (base64Image.startsWith('data:')) {
+      const mimeMatch =
+        base64Image.match(/^data:([^;]+);/);
+
+      if (mimeMatch && mimeMatch[1]) {
+        mimeType = mimeMatch[1];
+      }
     }
 
-    // Processa o HTML e o JSON de corte retornados pela API Gemini
+    // ---------------------------------------------------------
+    // 3. NOME / CONTEXTO DO ALUNO
+    //
+    // Primeiro tenta encontrar um campo com id "studentName".
+    // Caso não exista, usa o primeiro input de texto da página.
+    // ---------------------------------------------------------
+    let studentInfo = '';
+
+    const studentField =
+      document.getElementById('studentName');
+
+    if (studentField) {
+      studentInfo = studentField.value.trim();
+    } else {
+      const textInput =
+        document.querySelector('input[type="text"]');
+
+      if (textInput) {
+        studentInfo = textInput.value.trim();
+      }
+    }
+
+    // ---------------------------------------------------------
+    // 4. ENVIO PARA O BACKEND
+    // ---------------------------------------------------------
+    const response = await fetch('/api/analyze', {
+      method: 'POST',
+
+      headers: {
+        'Content-Type': 'application/json'
+      },
+
+      body: JSON.stringify({
+        imageBase64: cleanBase64,
+        mimeType: mimeType,
+        studentInfo: studentInfo
+      })
+    });
+
+    // ---------------------------------------------------------
+    // 5. LEITURA DA RESPOSTA
+    // ---------------------------------------------------------
+    let data;
+
+    try {
+      data = await response.json();
+    } catch (jsonError) {
+      throw new Error(
+        'O servidor retornou uma resposta inválida.'
+      );
+    }
+
+    // ---------------------------------------------------------
+    // 6. TRATAMENTO DE ERRO
+    // ---------------------------------------------------------
+    if (!response.ok) {
+
+      let errorMessage =
+        data.error ||
+        'Erro ao processar a imagem no servidor.';
+
+      // Mensagem específica para indisponibilidade
+      if (response.status === 503) {
+        errorMessage =
+          'O serviço de IA está temporariamente com alta demanda. ' +
+          'O sistema já tentou novamente automaticamente. ' +
+          'Aguarde alguns instantes e tente novamente.';
+      }
+
+      // Mensagem específica para limite
+      if (response.status === 429) {
+        errorMessage =
+          'O limite temporário de solicitações da IA foi atingido. ' +
+          'Aguarde alguns instantes e tente novamente.';
+      }
+
+      throw new Error(errorMessage);
+    }
+
+    // ---------------------------------------------------------
+    // 7. VALIDAÇÃO DA ANÁLISE
+    // ---------------------------------------------------------
+    if (!data.analysis) {
+      throw new Error(
+        'A IA não retornou uma análise válida.'
+      );
+    }
+
+    // ---------------------------------------------------------
+    // 8. PROCESSA A RESPOSTA NORMALMENTE
+    // ---------------------------------------------------------
     processAnalysisResponse(data.analysis);
 
   } catch (err) {
-    console.error("Erro na análise:", err);
+
+    console.error(
+      "Erro na análise:",
+      err
+    );
+
     outputContent.innerHTML = `
-      <div class="p-4 bg-red-500/10 border border-red-500/30 rounded-lg text-red-400 text-xs text-center space-y-2">
-        <p class="font-bold">Ocorreu um erro ao gerar a análise:</p>
-        <p>${err.message}</p>
+      <div class="p-4 bg-red-500/10 border border-red-500/30 rounded-lg text-red-400 text-xs text-center space-y-3">
+
+        <p class="font-bold">
+          Ocorreu um erro ao gerar a análise
+        </p>
+
+        <p>
+          ${err.message}
+        </p>
+
+        <p class="text-zinc-500 text-[10px]">
+          Se o problema estiver relacionado à disponibilidade da IA,
+          aguarde alguns instantes e tente novamente.
+        </p>
+
       </div>
     `;
+
   } finally {
+
     analyzeBtn.disabled = false;
-    analyzeBtn.classList.remove('opacity-50', 'cursor-not-allowed');
+
+    analyzeBtn.classList.remove(
+      'opacity-50',
+      'cursor-not-allowed'
+    );
   }
 }
 
