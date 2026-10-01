@@ -1,7 +1,4 @@
-import { GoogleGenAI } from '@google/genai';
-
-export default async function handler(req, res) {
-  // Configuração de CORS
+module.exports = async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Credentials', 'true');
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET,OPTIONS,POST');
@@ -25,14 +22,12 @@ export default async function handler(req, res) {
       return res.status(400).json({ error: 'Imagem não fornecida.' });
     }
 
-    const apiKey = (process.env.GEMINI_API_KEY || '').trim().replace(/^["']|["']$/g, '');
+    let apiKey = process.env.GEMINI_API_KEY || '';
+    apiKey = apiKey.trim().replace(/^["']|["']$/g, '');
 
     if (!apiKey) {
-      return res.status(500).json({ error: 'Chave GEMINI_API_KEY não encontrada nas variáveis de ambiente da Vercel.' });
+      return res.status(500).json({ error: 'Chave GEMINI_API_KEY não configurada na Vercel.' });
     }
-
-    // Inicializa a SDK Oficial
-    const ai = new GoogleGenAI({ apiKey });
 
     const cleanBase64 = imageBase64.includes(',') 
       ? imageBase64.split(',')[1] 
@@ -50,33 +45,47 @@ Aluno/Contexto: ${studentInfo || 'Não informado'}.
 Forneça um diagnóstico direto, didático e construtivo.
     `;
 
-    // Chamada oficial da SDK usando o modelo mais recente e estável (gemini-2.5-flash)
-    const response = await ai.models.generateContent({
-      model: 'gemini-2.5-flash',
+    const payload = {
       contents: [
         {
-          role: 'user',
           parts: [
             { text: promptText },
             {
-              inlineData: {
-                mimeType: mimeType || 'image/jpeg',
+              inline_data: {
+                mime_type: mimeType || 'image/jpeg',
                 data: cleanBase64
               }
             }
           ]
         }
       ]
+    };
+
+    // Chamada REST padronizada
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${encodeURIComponent(apiKey)}`;
+    
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
     });
 
-    return res.status(200).json({ 
-      analysis: response.text 
+    const data = await response.json();
+
+    if (response.ok && data.candidates?.[0]?.content?.parts?.[0]?.text) {
+      return res.status(200).json({ 
+        analysis: data.candidates[0].content.parts[0].text 
+      });
+    }
+
+    const errorMessage = data.error?.message || JSON.stringify(data);
+    return res.status(500).json({ 
+      error: `Erro na API do Gemini: ${errorMessage}` 
     });
 
   } catch (error) {
-    console.error('Erro na API:', error);
     return res.status(500).json({ 
-      error: `Erro ao processar imagem: ${error.message}` 
+      error: `Erro interno no servidor: ${error.message}` 
     });
   }
-}
+};
