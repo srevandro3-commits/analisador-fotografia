@@ -1,5 +1,5 @@
-export default async function handler(req, res) {
-  // Configuração dos cabeçalhos CORS
+module.exports = async function handler(req, res) {
+  // Cabeçalhos CORS
   res.setHeader('Access-Control-Allow-Credentials', 'true');
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET,OPTIONS,PATCH,DELETE,POST,PUT');
@@ -17,7 +17,7 @@ export default async function handler(req, res) {
   }
 
   try {
-    const { imageBase64, mimeType, studentInfo } = req.body;
+    const { imageBase64, mimeType, studentInfo } = req.body || {};
 
     if (!imageBase64) {
       return res.status(400).json({ error: 'Imagem não fornecida.' });
@@ -84,9 +84,9 @@ Forneça um diagnóstico direto, didático e construtivo.
     });
 
   } catch (error) {
-    console.error('Erro interno:', error);
+    console.error('Erro interno no servidor:', error);
     return res.status(500).json({ 
       error: `Erro no servidor interno: ${error.message}` 
     });
   }
-}
+};
