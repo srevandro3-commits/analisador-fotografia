@@ -1,67 +1,92 @@
 export default async function handler(req, res) {
+  // Configuração dos cabeçalhos CORS
+  res.setHeader('Access-Control-Allow-Credentials', true);
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'GET,OPTIONS,PATCH,DELETE,POST,PUT');
+  res.setHeader(
+    'Access-Control-Allow-Headers',
+    'X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Content-Type, Date, X-Api-Version'
+  );
+
+  if (req.method === 'OPTIONS') {
+    res.status(200).end();
+    return;
+  }
+
   if (req.method !== 'POST') {
-    return res.status(405).json({ error: 'Método não permitido' });
+    return res.status(405).json({ error: 'Método não permitido.' });
   }
 
   try {
-    const { imageBase64 } = req.body;
+    const { imageBase64, mimeType, studentInfo } = req.body;
 
     if (!imageBase64) {
-      return res.status(400).json({ error: 'Nenhuma imagem foi enviada.' });
+      return res.status(400).json({ error: 'Imagem não fornecida.' });
     }
 
     const apiKey = process.env.GEMINI_API_KEY;
-
     if (!apiKey) {
-      return res.status(500).json({ error: 'Chave de API não configurada no servidor.' });
+      return res.status(500).json({ error: 'Chave de API do Gemini não configurada no servidor.' });
     }
 
-    const systemPrompt = `Você é um fotógrafo profissional experiente e instrutor de fotografia didático.
-Analise a imagem enviada sob quatro aspectos:
+    // Modelo oficial e estável para processamento multimídia rápido
+    const MODEL_NAME = 'gemini-1.5-flash';
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/${MODEL_NAME}:generateContent?key=${apiKey}`;
 
-1. TÉCNICA E ILUMINAÇÃO: Avalie nitidez, uso da luz, profundidade de campo e controle de ruído.
-2. COMPOSIÇÃO E ENQUADRAMENTO: Analise o equilíbrio visual, pontos de interesse e a intenção do enquadramento.
-3. FORÇA VISUAL E IMPACTO: Avalie a intenção narrativa, escolha do assunto e contexto.
-4. GUIA DE EDIÇÃO: Dê passos concretos de pós-processamento no Lightroom/Photoshop.
+    const promptText = `
+Você é um especialista e mentor crítico em fotografia.
+Analise a imagem enviada considerando os seguintes pilares técnicos e estéticos:
+1. Composição e Enquadramento (Regra dos terços, linhas guias, respiro, cortes).
+2. Iluminação e Exposição (Altas luzes, sombras, contraste, direção da luz).
+3. Foco e Nitidez (Ponto de foco, profundidade de campo).
+4. Cores e Pós-processamento (Balanço de branco, saturação, tom de pele).
 
-IMPORTANTE PARA O REENQUADRAMENTO:
-No final da sua resposta, forneça OBRIGATORIAMENTE um bloco JSON com a sugestão do retângulo de corte ideal (crop) em percentual em relação à foto original, no seguinte formato exato:
-\`\`\`json
-{
-  "crop": {
-    "topPercent": 10,
-    "leftPercent": 15,
-    "widthPercent": 70,
-    "heightPercent": 80
-  }
-}
-\`\`\`
-Forneça a análise detalhada em HTML limpo (usando divs com as classes 'section-title' e 'feedback-block'). Mantenha um tom encorajador, instrutivo e direto ao ponto.`;
+Forneça um diagnóstico estruturado, didático e construtivo. Aluno/Contexto: ${studentInfo || 'Não informado'}.
+    `;
 
-    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        contents: [{
+    const payload = {
+      contents: [
+        {
           parts: [
-            { text: systemPrompt },
-            { inline_data: { mime_type: "image/jpeg", data: imageBase64 } }
+            { text: promptText },
+            {
+              inline_data: {
+                mime_type: mimeType || 'image/jpeg',
+                data: imageBase64
+              }
+            }
           ]
-        }]
-      })
+        }
+      ]
+    };
+
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(payload)
     });
 
     const data = await response.json();
 
     if (!response.ok) {
-      throw new Error(data.error?.message || 'Erro ao conectar com a API do Gemini');
+      console.error('Erro retornado pela API do Gemini:', data);
+      return res.status(response.status).json({
+        error: data.error?.message || 'Erro de comunicação com a API do Gemini.'
+      });
     }
 
-    const resultHtml = data.candidates[0].content.parts[0].text;
-    return res.status(200).json({ analysis: resultHtml });
+    const analysisText = data.candidates?.[0]?.content?.parts?.[0]?.text;
+
+    if (!analysisText) {
+      return res.status(500).json({ error: 'A API não retornou o texto da análise.' });
+    }
+
+    return res.status(200).json({ analysis: analysisText });
 
   } catch (error) {
-    console.error(error);
-    return res.status(500).json({ error: 'Erro ao processar a análise da imagem.' });
+    console.error('Erro no processamento interno:', error);
+    return res.status(500).json({ error: 'Erro interno ao processar a análise da imagem.' });
   }
 }
