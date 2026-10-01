@@ -62,8 +62,8 @@ Forneça um diagnóstico direto, didático e construtivo.
       ]
     };
 
-    // Apontado para o modelo correto gemini-1.5-flash
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${encodeURIComponent(apiKey)}`;
+    // Endpoint v1 oficial com o modelo gemini-1.5-flash
+    const url = `https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash:generateContent?key=${encodeURIComponent(apiKey)}`;
     
     const response = await fetch(url, {
       method: 'POST',
@@ -83,7 +83,6 @@ Forneça um diagnóstico direto, didático e construtivo.
     return res.status(500).json({ 
       error: `Erro na API do Gemini: ${errorMessage}` 
     });
-
   } catch (error) {
     console.error('Erro interno no servidor:', error);
     return res.status(500).json({ 
