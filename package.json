@@ -2,9 +2,8 @@
   "name": "analisador-fotografia",
   "version": "1.0.0",
   "description": "Analisador de Fotografia com IA",
-  "main": "index.js",
-  "scripts": {
-    "start": "node index.js"
-  },
-  "dependencies": {}
+  "main": "api/analyze.js",
+  "dependencies": {
+    "@google/genai": "^0.1.1"
+  }
 }
