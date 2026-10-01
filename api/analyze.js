@@ -1,7 +1,5 @@
-import { GoogleGenAI } from '@google/genai';
-
 export default async function handler(req, res) {
-  // Cabeçalhos CORS
+  // Configuração dos cabeçalhos CORS
   res.setHeader('Access-Control-Allow-Credentials', 'true');
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET,OPTIONS,PATCH,DELETE,POST,PUT');
@@ -32,10 +30,6 @@ export default async function handler(req, res) {
       return res.status(500).json({ error: 'Chave GEMINI_API_KEY não configurada na Vercel.' });
     }
 
-    // Inicializa o cliente oficial da SDK
-    const ai = new GoogleGenAI({ apiKey });
-
-    // Trata o Base64
     const cleanBase64 = imageBase64.includes(',') 
       ? imageBase64.split(',')[1] 
       : imageBase64;
@@ -52,39 +46,47 @@ Aluno/Contexto: ${studentInfo || 'Não informado'}.
 Forneça um diagnóstico direto, didático e construtivo.
     `;
 
-    // Chamada usando o modelo atual recomendado
-    const response = await ai.models.generateContent({
-      model: 'gemini-3.8-flash',
+    const payload = {
       contents: [
         {
-          role: 'user',
           parts: [
             { text: promptText },
             {
-              inlineData: {
-                mimeType: mimeType || 'image/jpeg',
+              inline_data: {
+                mime_type: mimeType || 'image/jpeg',
                 data: cleanBase64
               }
             }
           ]
         }
       ]
+    };
+
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.8-flash:generateContent?key=${encodeURIComponent(apiKey)}`;
+    
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
     });
 
-    if (response && response.text) {
+    const data = await response.json();
+
+    if (response.ok && data.candidates?.[0]?.content?.parts?.[0]?.text) {
       return res.status(200).json({ 
-        analysis: response.text 
+        analysis: data.candidates[0].content.parts[0].text 
       });
     }
 
+    const errorMessage = data.error?.message || JSON.stringify(data);
     return res.status(500).json({ 
-      error: 'Não foi possível obter a resposta da IA.' 
+      error: `Erro na API do Gemini: ${errorMessage}` 
     });
 
   } catch (error) {
-    console.error('Erro na API do Gemini:', error);
+    console.error('Erro interno:', error);
     return res.status(500).json({ 
-      error: `Erro na API do Gemini: ${error.message || error}` 
+      error: `Erro no servidor interno: ${error.message}` 
     });
   }
 }
