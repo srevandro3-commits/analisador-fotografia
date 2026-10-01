@@ -62,8 +62,8 @@ Forneça um diagnóstico direto, didático e construtivo.
       ]
     };
 
-    // Modelo atualizado compatível com o endpoint v1beta
-    const MODEL_NAME = 'gemini-2.5-flash';
+    // Modelo atualizado solicitado pela API
+    const MODEL_NAME = 'gemini-3.8-flash';
     const url = `https://generativelanguage.googleapis.com/v1beta/models/${MODEL_NAME}:generateContent?key=${encodeURIComponent(apiKey)}`;
 
     const response = await fetch(url, {
