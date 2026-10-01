@@ -1,6 +1,6 @@
 export default async function handler(req, res) {
   // Configuração dos cabeçalhos CORS
-  res.setHeader('Access-Control-Allow-Credentials', true);
+  res.setHeader('Access-Control-Allow-Credentials', 'true');
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET,OPTIONS,PATCH,DELETE,POST,PUT');
   res.setHeader(
@@ -9,8 +9,7 @@ export default async function handler(req, res) {
   );
 
   if (req.method === 'OPTIONS') {
-    res.status(200).end();
-    return;
+    return res.status(200).end();
   }
 
   if (req.method !== 'POST') {
@@ -26,22 +25,24 @@ export default async function handler(req, res) {
 
     const apiKey = process.env.GEMINI_API_KEY;
     if (!apiKey) {
-      return res.status(500).json({ error: 'Chave de API do Gemini não configurada no servidor.' });
+      return res.status(500).json({ error: 'Chave GEMINI_API_KEY não configurada na Vercel.' });
     }
 
-    // Modelo oficial e estável para processamento multimídia rápido
-    const MODEL_NAME = 'gemini-1.5-flash';
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/${MODEL_NAME}:generateContent?key=${apiKey}`;
+    // Trata se a string vier com ou sem o prefixo data:image/...;base64,
+    const cleanBase64 = imageBase64.includes(',') 
+      ? imageBase64.split(',')[1] 
+      : imageBase64;
 
     const promptText = `
-Você é um especialista e mentor crítico em fotografia.
-Analise a imagem enviada considerando os seguintes pilares técnicos e estéticos:
+Você é um especialista e mentor crítico em fotografia profissional.
+Analise a imagem enviada considerando estes 4 pilares:
 1. Composição e Enquadramento (Regra dos terços, linhas guias, respiro, cortes).
 2. Iluminação e Exposição (Altas luzes, sombras, contraste, direção da luz).
 3. Foco e Nitidez (Ponto de foco, profundidade de campo).
 4. Cores e Pós-processamento (Balanço de branco, saturação, tom de pele).
 
-Forneça um diagnóstico estruturado, didático e construtivo. Aluno/Contexto: ${studentInfo || 'Não informado'}.
+Aluno/Contexto: ${studentInfo || 'Não informado'}.
+Forneça um diagnóstico direto, didático e construtivo.
     `;
 
     const payload = {
@@ -52,7 +53,7 @@ Forneça um diagnóstico estruturado, didático e construtivo. Aluno/Contexto: $
             {
               inline_data: {
                 mime_type: mimeType || 'image/jpeg',
-                data: imageBase64
+                data: cleanBase64
               }
             }
           ]
@@ -60,33 +61,41 @@ Forneça um diagnóstico estruturado, didático e construtivo. Aluno/Contexto: $
       ]
     };
 
-    const response = await fetch(url, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify(payload)
-    });
+    // Tenta primeiro com gemini-1.5-flash e como fallback gemini-1.5-pro
+    const models = ['gemini-1.5-flash', 'gemini-1.5-pro'];
+    let lastError = null;
 
-    const data = await response.json();
-
-    if (!response.ok) {
-      console.error('Erro retornado pela API do Gemini:', data);
-      return res.status(response.status).json({
-        error: data.error?.message || 'Erro de comunicação com a API do Gemini.'
+    for (const model of models) {
+      const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`;
+      
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-goog-api-key': apiKey.trim()
+        },
+        body: JSON.stringify(payload)
       });
+
+      const data = await response.json();
+
+      if (response.ok && data.candidates?.[0]?.content?.parts?.[0]?.text) {
+        return res.status(200).json({ 
+          analysis: data.candidates[0].content.parts[0].text 
+        });
+      }
+
+      lastError = data.error?.message || JSON.stringify(data);
     }
 
-    const analysisText = data.candidates?.[0]?.content?.parts?.[0]?.text;
-
-    if (!analysisText) {
-      return res.status(500).json({ error: 'A API não retornou o texto da análise.' });
-    }
-
-    return res.status(200).json({ analysis: analysisText });
+    return res.status(500).json({ 
+      error: `Erro na API do Gemini: ${lastError}` 
+    });
 
   } catch (error) {
     console.error('Erro no processamento interno:', error);
-    return res.status(500).json({ error: 'Erro interno ao processar a análise da imagem.' });
+    return res.status(500).json({ 
+      error: `Erro no servidor interno: ${error.message}` 
+    });
   }
 }
