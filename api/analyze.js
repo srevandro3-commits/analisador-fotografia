@@ -23,12 +23,13 @@ export default async function handler(req, res) {
       return res.status(400).json({ error: 'Imagem não fornecida.' });
     }
 
-    const apiKey = process.env.GEMINI_API_KEY;
+    let apiKey = process.env.GEMINI_API_KEY || '';
+    apiKey = apiKey.trim().replace(/^["']|["']$/g, '');
+
     if (!apiKey) {
       return res.status(500).json({ error: 'Chave GEMINI_API_KEY não configurada na Vercel.' });
     }
 
-    // Trata se a string vier com ou sem o prefixo data:image/...;base64,
     const cleanBase64 = imageBase64.includes(',') 
       ? imageBase64.split(',')[1] 
       : imageBase64;
@@ -61,35 +62,29 @@ Forneça um diagnóstico direto, didático e construtivo.
       ]
     };
 
-    // Tenta primeiro com gemini-1.5-flash e como fallback gemini-1.5-pro
-    const models = ['gemini-1.5-flash', 'gemini-1.5-pro'];
-    let lastError = null;
+    // Modelo atualizado compatível com o endpoint v1beta
+    const MODEL_NAME = 'gemini-2.5-flash';
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/${MODEL_NAME}:generateContent?key=${encodeURIComponent(apiKey)}`;
 
-    for (const model of models) {
-      const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`;
-      
-      const response = await fetch(url, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-goog-api-key': apiKey.trim()
-        },
-        body: JSON.stringify(payload)
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(payload)
+    });
+
+    const data = await response.json();
+
+    if (response.ok && data.candidates?.[0]?.content?.parts?.[0]?.text) {
+      return res.status(200).json({ 
+        analysis: data.candidates[0].content.parts[0].text 
       });
-
-      const data = await response.json();
-
-      if (response.ok && data.candidates?.[0]?.content?.parts?.[0]?.text) {
-        return res.status(200).json({ 
-          analysis: data.candidates[0].content.parts[0].text 
-        });
-      }
-
-      lastError = data.error?.message || JSON.stringify(data);
     }
 
+    const errorMessage = data.error?.message || JSON.stringify(data);
     return res.status(500).json({ 
-      error: `Erro na API do Gemini: ${lastError}` 
+      error: `Erro na API do Gemini: ${errorMessage}` 
     });
 
   } catch (error) {
