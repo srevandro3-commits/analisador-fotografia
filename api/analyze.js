@@ -62,6 +62,7 @@ Forneça um diagnóstico direto, didático e construtivo.
       ]
     };
 
+    // Apontado para o modelo correto gemini-1.5-flash
     const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${encodeURIComponent(apiKey)}`;
     
     const response = await fetch(url, {
