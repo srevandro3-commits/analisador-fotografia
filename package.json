@@ -1,12 +1,10 @@
 {
   "name": "analisador-fotografia",
   "version": "1.0.0",
-  "private": true,
+  "description": "Analisador de Fotografia com IA",
+  "main": "index.js",
   "scripts": {
-    "dev": "vercel dev",
-    "build": "vercel build"
+    "start": "node index.js"
   },
-  "dependencies": {
-    "@google/genai": "^0.1.1"
-  }
+  "dependencies": {}
 }
