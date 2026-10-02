@@ -45,42 +45,60 @@ Aluno/Turma: ${studentInfo || 'Não informado'}.
 Forneça um laudo didático, direto, construtivo e altamente técnico.
     `;
 
-    // Endpoint atualizado usando o modelo gemini-2.5-flash e cabeçalho x-goog-api-key
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent`;
+    // Modelos suportados na ordem exigida pelas novas chaves
+    const modelsToTry = [
+      'gemini-3.8-flash',
+      'gemini-2.5-flash'
+    ];
 
-    const response = await fetch(url, {
-      method: 'POST',
-      headers: { 
-        'Content-Type': 'application/json',
-        'x-goog-api-key': apiKey
-      },
-      body: JSON.stringify({
-        contents: [
-          {
-            parts: [
-              { text: promptText },
+    let lastError = '';
+
+    for (const modelName of modelsToTry) {
+      try {
+        const url = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent`;
+
+        const response = await fetch(url, {
+          method: 'POST',
+          headers: { 
+            'Content-Type': 'application/json',
+            'x-goog-api-key': apiKey
+          },
+          body: JSON.stringify({
+            contents: [
               {
-                inline_data: {
-                  mime_type: mimeType || 'image/jpeg',
-                  data: cleanBase64
-                }
+                parts: [
+                  { text: promptText },
+                  {
+                    inline_data: {
+                      mime_type: mimeType || 'image/jpeg',
+                      data: cleanBase64
+                    }
+                  }
+                ]
               }
             ]
-          }
-        ]
-      })
-    });
+          })
+        });
 
-    const data = await response.json();
+        const data = await response.json();
 
-    if (response.ok && data.candidates?.[0]?.content?.parts?.[0]?.text) {
-      return res.status(200).json({ 
-        analysis: data.candidates[0].content.parts[0].text 
-      });
+        if (response.ok && data.candidates?.[0]?.content?.parts?.[0]?.text) {
+          return res.status(200).json({ 
+            analysis: data.candidates[0].content.parts[0].text 
+          });
+        }
+
+        if (data.error?.message) {
+          lastError = data.error.message;
+        }
+      } catch (err) {
+        lastError = err.message;
+      }
     }
 
-    const errorMessage = data.error?.message || 'Falha ao processar com a API do Gemini.';
-    return res.status(500).json({ error: errorMessage });
+    return res.status(500).json({ 
+      error: `Falha na requisição. Último retorno da API: ${lastError}` 
+    });
 
   } catch (error) {
     console.error('Erro interno:', error);
