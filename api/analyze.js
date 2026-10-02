@@ -42,11 +42,11 @@ Analise a imagem enviada considerando os 4 pilares:
 4. Cores e Pós-processamento (Balanço de branco, saturação, tom de pele).
 
 Aluno/Turma: ${studentInfo || 'Não informado'}.
-Forneça um laudo didático, direto, construtivo e highly técnico.
+Forneça um laudo didático, direto, construtivo e altamente técnico.
     `;
 
-    // Endpoint v1beta aceitando autenticação por Header (suporta chaves AQ... e AIzaSy...)
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent`;
+    // Endpoint atualizado usando o modelo gemini-2.5-flash e cabeçalho x-goog-api-key
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent`;
 
     const response = await fetch(url, {
       method: 'POST',
