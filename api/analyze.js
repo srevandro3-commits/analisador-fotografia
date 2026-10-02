@@ -48,7 +48,7 @@ Forneça um diagnóstico direto, didático e construtivo.
 
     // Payload compatível com a API da Groq (Llama 3.2 Vision)
     const payload = {
-      model: "llama-3.2-11b-vision-preview",
+      model: "llama-3.2-11b-vision-instruct",
       messages: [
         {
           role: "user",
