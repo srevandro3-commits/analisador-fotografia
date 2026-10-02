@@ -1,4 +1,5 @@
 module.exports = async function handler(req, res) {
+  // Configuração de CORS para permitir requisições do frontend
   res.setHeader('Access-Control-Allow-Credentials', 'true');
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET,OPTIONS,POST');
@@ -22,6 +23,7 @@ module.exports = async function handler(req, res) {
       return res.status(400).json({ error: 'Imagem não fornecida.' });
     }
 
+    // Limpeza da Chave de API das variáveis de ambiente da Vercel
     let apiKey = process.env.GEMINI_API_KEY || '';
     apiKey = apiKey.trim().replace(/^["']|["']$/g, '');
 
@@ -29,10 +31,12 @@ module.exports = async function handler(req, res) {
       return res.status(500).json({ error: 'Chave GEMINI_API_KEY não configurada na Vercel.' });
     }
 
+    // Tratamento do formato da imagem em Base64
     const cleanBase64 = imageBase64.includes(',') 
       ? imageBase64.split(',')[1] 
       : imageBase64;
 
+    // Prompt de análise técnica de fotografia
     const promptText = `
 Você é um mentor especialista em fotografia profissional e professor técnico.
 Analise a imagem enviada considerando os 4 pilares:
@@ -45,60 +49,42 @@ Aluno/Turma: ${studentInfo || 'Não informado'}.
 Forneça um laudo didático, direto, construtivo e altamente técnico.
     `;
 
-    // Modelos suportados na ordem exigida pelas novas chaves
-    const modelsToTry = [
-      'gemini-3.8-flash',
-      'gemini-2.5-flash'
-    ];
+    // Endpoint direto usando o modelo gemini-3.8-flash
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.8-flash:generateContent`;
 
-    let lastError = '';
-
-    for (const modelName of modelsToTry) {
-      try {
-        const url = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent`;
-
-        const response = await fetch(url, {
-          method: 'POST',
-          headers: { 
-            'Content-Type': 'application/json',
-            'x-goog-api-key': apiKey
-          },
-          body: JSON.stringify({
-            contents: [
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: { 
+        'Content-Type': 'application/json',
+        'x-goog-api-key': apiKey
+      },
+      body: JSON.stringify({
+        contents: [
+          {
+            parts: [
+              { text: promptText },
               {
-                parts: [
-                  { text: promptText },
-                  {
-                    inline_data: {
-                      mime_type: mimeType || 'image/jpeg',
-                      data: cleanBase64
-                    }
-                  }
-                ]
+                inline_data: {
+                  mime_type: mimeType || 'image/jpeg',
+                  data: cleanBase64
+                }
               }
             ]
-          })
-        });
+          }
+        ]
+      })
+    });
 
-        const data = await response.json();
+    const data = await response.json();
 
-        if (response.ok && data.candidates?.[0]?.content?.parts?.[0]?.text) {
-          return res.status(200).json({ 
-            analysis: data.candidates[0].content.parts[0].text 
-          });
-        }
-
-        if (data.error?.message) {
-          lastError = data.error.message;
-        }
-      } catch (err) {
-        lastError = err.message;
-      }
+    if (response.ok && data.candidates?.[0]?.content?.parts?.[0]?.text) {
+      return res.status(200).json({ 
+        analysis: data.candidates[0].content.parts[0].text 
+      });
     }
 
-    return res.status(500).json({ 
-      error: `Falha na requisição. Último retorno da API: ${lastError}` 
-    });
+    const errorMessage = data.error?.message || 'Falha ao processar com a API do Gemini.';
+    return res.status(500).json({ error: errorMessage });
 
   } catch (error) {
     console.error('Erro interno:', error);
